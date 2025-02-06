@@ -80,7 +80,7 @@ def process_csv(uploaded_file):
     return base_dir
 
 def main():
-    st.title("PECS LISITNG EA SPLITTER")
+    st.title("PECS EA LISITNG SPLITTER")
     
     uploaded_file = st.file_uploader("Upload CSV file", type=['csv'])
     
