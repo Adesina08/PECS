@@ -81,5 +81,3 @@ if uploaded_file is not None:
                 file_name="split_csvs.zip",
                 mime="application/zip"
             )
-
-              st.ballon()
