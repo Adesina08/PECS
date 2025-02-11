@@ -28,7 +28,7 @@ def process_data(df, selected_col):
                 non_eligible += 1
         
         results.append({
-            'State': state,
+            'state': state,
             'EAN': ean,
             'Total hh_selected count': total,
             'Eligible for main(has a child 6 -59 months)': eligible,
@@ -51,7 +51,7 @@ if uploaded_file and selected_col:
             st.error(f"Column '{selected_col}' not found in the uploaded file")
             st.stop()
             
-        if 'State' not in df.columns or 'EAN' not in df.columns:
+        if 'state' not in df.columns or 'EAN' not in df.columns:
             st.error("File must contain both 'State' and 'EAN' columns")
             st.stop()
             
