@@ -14,25 +14,32 @@ def process_data(df, selected_col):
         figures = [f.strip() for f in household_numbers.split(',') if f.strip()]
         total = len(figures)
         
-        eligible = 0
-        non_eligible = 0
+        eligible = []
+        non_eligible = []
         
         for fig in figures:
-            column_name = f'enfant_6_59_{fig}'
-            if column_name in df.columns:
-                if pd.notna(row[column_name]) and row[column_name].strip().lower() == 'yes':
-                    eligible += 1
+            try:
+                # Convert to integer and back to string to remove leading zeros
+                num = str(int(fig))
+                column_name = f'enfant_6_59_{num}'
+                
+                if column_name in df.columns:
+                    value = str(row.get(column_name, '')).strip().lower()
+                    if value == 'yes':
+                        eligible.append(fig)  # Keep original formatting with leading zeros
+                    else:
+                        non_eligible.append(fig)
                 else:
-                    non_eligible += 1
-            else:
-                non_eligible += 1
+                    non_eligible.append(fig)
+            except ValueError:
+                non_eligible.append(fig)
         
         results.append({
             'state': state,
             'EAN': ean,
             'Total hh_selected count': total,
-            'Eligible for main(has a child 6 -59 months)': eligible,
-            'Non eligible for main(has no child 6- 59 months)': non_eligible
+            'Eligible for main(has a child 6 -59 months)': ', '.join(eligible),
+            'Non eligible for main(has no child 6- 59 months)': ', '.join(non_eligible)
         })
     
     return pd.DataFrame(results)
@@ -46,13 +53,12 @@ if uploaded_file and selected_col:
     try:
         df = pd.read_excel(uploaded_file)
         
-        # Corrected if statement
         if selected_col not in df.columns:
             st.error(f"Column '{selected_col}' not found in the uploaded file")
             st.stop()
             
         if 'state' not in df.columns or 'EAN' not in df.columns:
-            st.error("File must contain both 'State' and 'EAN' columns")
+            st.error("File must contain both 'state' and 'EAN' columns")
             st.stop()
             
         result_df = process_data(df, selected_col)
