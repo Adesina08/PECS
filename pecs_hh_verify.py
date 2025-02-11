@@ -1,49 +1,81 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
 
-def process_data(df, selected_col):
-    results = []
+# Function to process the data and generate the output DataFrame
+def process_data(df, selected_column):
+    # Initialize the result DataFrame
+    result = pd.DataFrame(columns=["State", "EAN", "Total hh_selected count", 
+                                   "Eligible for main (has a child 6-59 months)", 
+                                   "Non eligible for main (has no child 6-59 months)"])
     
-    for _, row in df.iterrows():
-        state = row.get('State', '')
-        ean = row.get('EAN', '')
-        household_numbers = str(row.get(selected_col, '')).strip()
+    # Iterate over each row in the DataFrame
+    for index, row in df.iterrows():
+        state = row["state"]
+        ean = row["EAN"]
+        household_numbers = row[selected_column].split(",") if isinstance(row[selected_column], str) else []
+        household_numbers = [num.strip().zfill(3) for num in household_numbers]
         
-        # Split and clean household numbers
-        figures = [f.strip() for f in household_numbers.split(',') if f.strip()]
-        total = len(figures)
+        total_count = len(household_numbers)
+        eligible = []
+        non_eligible = []
         
-        eligible = 0
-        non_eligible = 0
-        
-        for fig in figures:
-            column_name = f'enfant_6_59_{fig}'
+        for num in household_numbers:
+            column_name = f"enfant_6_59_{num}"
             if column_name in df.columns:
-                if pd.notna(row[column_name]) and row[column_name].strip().lower() == 'yes':
-                    eligible += 1
+                value = row[column_name]
+                if value == "Yes":
+                    eligible.append(num)
                 else:
-                    non_eligible += 1
-            else:
-                non_eligible += 1
+                    non_eligible.append(num)
         
-        results.append({
-            'State': state,
-            'EAN': ean,
-            'Total hh_selected count': total,
-            'Eligible for main(has a child 6 -59 months)': eligible,
-            'Non eligible for main(has no child 6- 59 months)': non_eligible
-        })
+        # Append the results to the result DataFrame
+        result = result.append({
+            "State": state,
+            "EAN": ean,
+            "Total hh_selected count": total_count,
+            "Eligible for main (has a child 6-59 months)": ", ".join(eligible),
+            "Non eligible for main (has no child 6-59 months)": ", ".join(non_eligible)
+        }, ignore_index=True)
     
-    return pd.DataFrame(results)
+    return result
 
-st.title("Household Eligibility Analyzer")
+# Function to convert DataFrame to Excel file and provide a download link
+def convert_df_to_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Sheet1', index=False)
+    output.seek(0)
+    return output
 
-uploaded_file = st.file_uploader("Upload Excel file", type=['xlsx', 'xls'])
-selected_col = st.text_input("Column name with household numbers", "selected_household")
+# Streamlit App
+st.title("Household Data Processor")
 
-if uploaded_file and selected_col:
+# File uploader
+uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
+
+if uploaded_file is not None:
     try:
+        # Read the uploaded Excel file
         df = pd.read_excel(uploaded_file)
         
-        if selected_col not in df.columns
+        # Column selector
+        selected_column = st.selectbox("Select the column containing household numbers:", df.columns)
+        
+        if selected_column:
+            # Process the data
+            result_df = process_data(df, selected_column)
+            
+            # Display the processed data
+            st.write("Processed Data:")
+            st.dataframe(result_df)
+            
+            # Download button
+            excel_file = convert_df_to_excel(result_df)
+            st.download_button(
+                label="Download Processed Data as Excel",
+                data=excel_file,
+                file_name="processed_data.xlsx",
+                mime="application/vnd.ms-excel"
+            )
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
