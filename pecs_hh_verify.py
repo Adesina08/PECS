@@ -6,7 +6,7 @@ def process_data(df, selected_col):
     results = []
     
     for _, row in df.iterrows():
-        state = row.get('State', '')
+        state = row.get('state', '')
         ean = row.get('EAN', '')
         household_numbers = str(row.get(selected_col, '')).strip()
         
