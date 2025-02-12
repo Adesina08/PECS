@@ -17,8 +17,8 @@ def process_data(df, selected_col):
         eligible = []
         non_eligible = []
         
-   for fig in figures:
-    try:
+    for fig in figures:
+        try:
         num = str(int(fig))
         column_name = f'enfant_6_59_{num}'
         
@@ -27,11 +27,11 @@ def process_data(df, selected_col):
             # Check for multiple valid values: "Yes", "1", "yes"
             if value in ['yes', '1']:  # .lower() was already applied, so we don't need "Yes"
                 eligible.append(fig)
-            else:
+                else:
                 non_eligible.append(fig)
-        else:
+            else:
             non_eligible.append(fig)
-    except ValueError:
+        except ValueError:
         non_eligible.append(fig)
         
         results.append({
