@@ -31,7 +31,7 @@ def process_data(df, selected_col):
                 non_eligible.append(fig)
             else:
             non_eligible.append(fig)
-        except ValueError:
+    except ValueError:
         non_eligible.append(fig)
         
         results.append({
