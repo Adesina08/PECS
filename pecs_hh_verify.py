@@ -19,8 +19,8 @@ def process_data(df, selected_col):
         
     for fig in figures:
         try:
-        num = str(int(fig))
-        column_name = f'enfant_6_59_{num}'
+            num = str(int(fig))
+            column_name = f'enfant_6_59_{num}'
         
         if column_name in df.columns:
             value = str(row.get(column_name, '')).strip().lower()
