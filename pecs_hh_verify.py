@@ -25,9 +25,9 @@ def process_data(df, selected_col):
                 
                 if column_name in df.columns:
                     value = str(row.get(column_name, '')).strip().lower()
-                    # Check for multiple valid values: "Yes", "1", "yes"
+                    # Updated condition to include '1' as eligible
                     if value in ['yes', '1']:
-                        eligible.append(fig)
+                        eligible.append(fig)  # Keep original formatting with leading zeros
                     else:
                         non_eligible.append(fig)
                 else:
@@ -47,19 +47,17 @@ def process_data(df, selected_col):
 
 st.title("Household Eligibility Analyzer")
 
-# Allow both Excel and CSV files
-uploaded_file = st.file_uploader("Upload file", type=['xlsx', 'xls', 'csv'])
+# Updated to accept CSV files
+uploaded_file = st.file_uploader("Upload data file", type=['xlsx', 'xls', 'csv'])
 selected_col = st.text_input("Column name with household numbers", "selected_household")
 
 if uploaded_file and selected_col:
     try:
-        # Determine file type and read accordingly
-        file_extension = uploaded_file.name.split('.')[-1].lower()
-        
-        if file_extension in ['xlsx', 'xls']:
-            df = pd.read_excel(uploaded_file)
-        else:  # csv
+        # Read file based on extension
+        if uploaded_file.name.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
         
         if selected_col not in df.columns:
             st.error(f"Column '{selected_col}' not found in the uploaded file")
