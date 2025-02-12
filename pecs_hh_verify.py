@@ -17,22 +17,23 @@ def process_data(df, selected_col):
         eligible = []
         non_eligible = []
         
-    for fig in figures:
-        try:
-            num = str(int(fig))
-            column_name = f'enfant_6_59_{num}'
-        
-        if column_name in df.columns:
-            value = str(row.get(column_name, '')).strip().lower()
-            # Check for multiple valid values: "Yes", "1", "yes"
-            if value in ['yes', '1']:  # .lower() was already applied, so we don't need "Yes"
-                eligible.append(fig)
+        for fig in figures:
+            try:
+                # Convert to integer and back to string to remove leading zeros
+                num = str(int(fig))
+                column_name = f'enfant_6_59_{num}'
+                
+                if column_name in df.columns:
+                    value = str(row.get(column_name, '')).strip().lower()
+                    # Check for multiple valid values: "Yes", "1", "yes"
+                    if value in ['yes', '1']:
+                        eligible.append(fig)
+                    else:
+                        non_eligible.append(fig)
                 else:
+                    non_eligible.append(fig)
+            except ValueError:
                 non_eligible.append(fig)
-            else:
-            non_eligible.append(fig)
-    except ValueError:
-        non_eligible.append(fig)
         
         results.append({
             'state': state,
