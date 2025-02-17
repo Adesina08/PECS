@@ -6,6 +6,7 @@ from io import BytesIO
 import uuid
 
 def create_zip(folder_path):
+    """Create in-memory ZIP archive from folder structure"""
     memory_file = BytesIO()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(folder_path):
@@ -17,6 +18,7 @@ def create_zip(folder_path):
     return memory_file
 
 def read_file(file):
+    """Read uploaded file with format validation"""
     if file.name.endswith('.csv'):
         return pd.read_csv(file)
     elif file.name.endswith('.xlsx'):
@@ -78,39 +80,49 @@ def main():
             ref_df = st.session_state.ref_df.copy()
             data_df = st.session_state.data_df.copy()
 
-            # Merge datasets
+            # Validate column selection
+            state_col_name = selected_cols['state']
+            if state_col_name not in ref_df.columns:
+                raise ValueError(f"State column '{state_col_name}' not found in reference file")
+
+            # Merge datasets with conflict resolution
             merged = ref_df.merge(
                 data_df,
                 left_on=[selected_cols['ref_ean'], selected_cols['ref_secondary']],
                 right_on=[selected_cols['data_ean'], selected_cols['data_secondary']],
                 how='left',
-                indicator=True
+                indicator=True,
+                suffixes=('_ref', '_data')
             )
 
-            # Handle missing EANs
+            # Handle missing EANs with state association
             missing_mask = merged['_merge'] == 'left_only'
-            missing_eans = merged[missing_mask][selected_cols['ref_ean']].unique()
             
             # Create output structure
             base_path = f"output_{uuid.uuid4()}"
             os.makedirs(base_path, exist_ok=True)
 
-            # Create missing EANs report
-            if len(missing_eans) > 0:
-                missing_df = pd.DataFrame({
-                    'Missing EANs': missing_eans,
-                    'state': merged[missing_mask][selected_cols['state']].unique()[0]
-                })
+            # Create comprehensive missing EANs report
+            if missing_mask.any():
+                missing_df = merged[missing_mask][[selected_cols['ref_ean'], state_col_name]]
+                missing_df = missing_df.drop_duplicates().reset_index(drop=True)
+                missing_df.columns = ['Missing EAN', 'Associated State']
+                
                 missing_path = os.path.join(base_path, "missing_eans.xlsx")
                 missing_df.to_excel(missing_path, index=False)
 
             # Create state folders and EAN files
-            grouped = merged.groupby([selected_cols['state'], selected_cols['ref_ean']])
+            grouped = merged.groupby([state_col_name, selected_cols['ref_ean']])
+            
             for (state, ean), group in grouped:
-                state_folder = os.path.join(base_path, str(state))
+                # Sanitize folder names
+                safe_state = str(state).replace('/', '_').strip()
+                safe_ean = str(ean).replace('/', '_').strip()
+                
+                state_folder = os.path.join(base_path, safe_state)
                 os.makedirs(state_folder, exist_ok=True)
                 
-                output_path = os.path.join(state_folder, f"{ean}.csv")
+                output_path = os.path.join(state_folder, f"{safe_ean}.csv")
                 group.drop(columns='_merge').to_csv(output_path, index=False)
 
             # Create ZIP download
