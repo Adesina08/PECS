@@ -6,7 +6,6 @@ from io import BytesIO
 import uuid
 
 def create_zip(folder_path):
-    """Create in-memory ZIP archive from folder structure"""
     memory_file = BytesIO()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(folder_path):
@@ -18,7 +17,6 @@ def create_zip(folder_path):
     return memory_file
 
 def read_file(file):
-    """Read uploaded file with format validation"""
     if file.name.endswith('.csv'):
         return pd.read_csv(file)
     elif file.name.endswith('.xlsx'):
@@ -26,79 +24,89 @@ def read_file(file):
     else:
         raise ValueError("Unsupported file format")
 
-def validate_columns(df, required_cols, file_name):
-    """Validate presence of required columns in dataframe"""
-    missing = [col for col in required_cols if col not in df.columns]
-    if missing:
-        raise ValueError(f"Missing columns in {file_name}: {', '.join(missing)}")
-
 def main():
-    st.title("📁 EAN Data Processor")
-    st.markdown("### Upload your reference and data files")
+    st.title("📁 Advanced EAN Processor")
+    
+    # Initialize session state
+    if 'ref_df' not in st.session_state:
+        st.session_state.ref_df = None
+    if 'data_df' not in st.session_state:
+        st.session_state.data_df = None
 
     # File upload section
     with st.expander("📤 STEP 1: Upload Files", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
             ref_file = st.file_uploader("Reference File", type=['xlsx', 'csv'])
+            if ref_file:
+                st.session_state.ref_df = read_file(ref_file)
         with col2:
             data_file = st.file_uploader("Data File", type=['xlsx', 'csv'])
+            if data_file:
+                st.session_state.data_df = read_file(data_file)
 
     # Column configuration
     with st.expander("⚙️ STEP 2: Configure Columns", expanded=True):
         col1, col2 = st.columns(2)
+        selected_cols = {}
+        
         with col1:
-            st.subheader("Reference File Columns")
-            ref_ean_col = st.text_input("EAN Column Name", "EAN", key="ref_ean")
-            ref_secondary_col = st.text_input("Secondary Column Name", "SecondaryCol", key="ref_sec")
-            state_col = st.text_input("State Column Name", "State", key="state")
-            
-        with col2:
-            st.subheader("Data File Columns")
-            data_ean_col = st.text_input("EAN Column Name", "EAN", key="data_ean")
-            data_secondary_col = st.text_input("Secondary Column Name", "SecondaryCol", key="data_sec")
+            st.subheader("Reference File")
+            if st.session_state.ref_df is not None:
+                ref_cols = st.session_state.ref_df.columns.tolist()
+                selected_cols['ref_ean'] = st.selectbox("EAN Column", ref_cols, key='ref_ean')
+                selected_cols['ref_secondary'] = st.selectbox("Secondary Column", ref_cols, key='ref_secondary')
+                selected_cols['state'] = st.selectbox("State Column", ref_cols, key='state')
+            else:
+                st.info("Upload reference file to configure columns")
 
-    # Processing button
+        with col2:
+            st.subheader("Data File")
+            if st.session_state.data_df is not None:
+                data_cols = st.session_state.data_df.columns.tolist()
+                selected_cols['data_ean'] = st.selectbox("EAN Column", data_cols, key='data_ean')
+                selected_cols['data_secondary'] = st.selectbox("Secondary Column", data_cols, key='data_secondary')
+            else:
+                st.info("Upload data file to configure columns")
+
     if st.button("🚀 PROCESS FILES", type="primary"):
-        if not all([ref_file, data_file]):
+        if not all([st.session_state.ref_df is not None, st.session_state.data_df is not None]):
             st.error("Please upload both files before processing")
             return
 
         try:
-            # Validate file formats
-            if any(f.name.endswith(('.xlsm', '.xls')) for f in [ref_file, data_file]):
-                raise ValueError("Macro-enabled or legacy Excel files are not supported")
-
-            # Read and validate files
-            ref_df = read_file(ref_file)
-            data_df = read_file(data_file)
-
-            # Validate columns
-            validate_columns(ref_df, [ref_ean_col, ref_secondary_col, state_col], "Reference File")
-            validate_columns(data_df, [data_ean_col, data_secondary_col], "Data File")
+            ref_df = st.session_state.ref_df.copy()
+            data_df = st.session_state.data_df.copy()
 
             # Merge datasets
             merged = ref_df.merge(
                 data_df,
-                left_on=[ref_ean_col, ref_secondary_col],
-                right_on=[data_ean_col, data_secondary_col],
+                left_on=[selected_cols['ref_ean'], selected_cols['ref_secondary']],
+                right_on=[selected_cols['data_ean'], selected_cols['data_secondary']],
                 how='left',
                 indicator=True
             )
 
             # Handle missing EANs
             missing_mask = merged['_merge'] == 'left_only'
-            if missing_mask.any():
-                missing_eans = merged.loc[missing_mask, ref_ean_col].unique()
-                st.warning(f"⚠️ Missing {len(missing_eans)} EANs in Data File")
-                st.write("Missing EAN numbers:", ", ".join(map(str, missing_eans)))
-
-            # Create folder structure
+            missing_eans = merged[missing_mask][selected_cols['ref_ean']].unique()
+            
+            # Create output structure
             base_path = f"output_{uuid.uuid4()}"
             os.makedirs(base_path, exist_ok=True)
 
-            # Group and save results
-            for (state, ean), group in merged.groupby([state_col, ref_ean_col]):
+            # Create missing EANs report
+            if len(missing_eans) > 0:
+                missing_df = pd.DataFrame({
+                    'Missing EANs': missing_eans,
+                    'State': merged[missing_mask][selected_cols['state']].unique()[0]
+                })
+                missing_path = os.path.join(base_path, "missing_eans.xlsx")
+                missing_df.to_excel(missing_path, index=False)
+
+            # Create state folders and EAN files
+            grouped = merged.groupby([selected_cols['state'], selected_cols['ref_ean']])
+            for (state, ean), group in grouped:
                 state_folder = os.path.join(base_path, str(state))
                 os.makedirs(state_folder, exist_ok=True)
                 
@@ -108,14 +116,14 @@ def main():
             # Create ZIP download
             zip_buffer = create_zip(base_path)
             
-            # Display success and download button
+            # Download button
             st.success("✅ Processing complete!")
             st.download_button(
                 label="📥 DOWNLOAD RESULTS",
                 data=zip_buffer,
                 file_name="processed_data.zip",
                 mime="application/zip",
-                help="Contains organized CSV files in state folders"
+                help="Contains organized CSV files and missing EANs report"
             )
 
         except Exception as e:
