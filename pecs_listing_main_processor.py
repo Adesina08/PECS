@@ -80,11 +80,6 @@ def main():
             ref_df = st.session_state.ref_df.copy()
             data_df = st.session_state.data_df.copy()
 
-            # Validate column selection
-            state_col_name = selected_cols['state']
-            if state_col_name not in ref_df.columns:
-                raise ValueError(f"State column '{state_col_name}' not found in reference file")
-
             # Merge datasets with conflict resolution
             merged = ref_df.merge(
                 data_df,
@@ -93,29 +88,38 @@ def main():
                 how='left',
                 indicator=True,
                 suffixes=('_ref', '_data')
-            )
+            
+            # Handle state column naming after merge
+            state_col_name = selected_cols['state']
+            possible_state_cols = [state_col_name, f"{state_col_name}_ref"]
+            state_col_in_merged = next((col for col in possible_state_cols if col in merged.columns), None)
+            
+            if not state_col_in_merged:
+                raise KeyError(f"State column '{state_col_name}' not found in merged data")
 
-            # Handle missing EANs with state association
+            # Handle missing EANs
             missing_mask = merged['_merge'] == 'left_only'
             
             # Create output structure
             base_path = f"output_{uuid.uuid4()}"
             os.makedirs(base_path, exist_ok=True)
 
-            # Create comprehensive missing EANs report
+            # Create missing EANs report with state
             if missing_mask.any():
-                missing_df = merged[missing_mask][[selected_cols['ref_ean'], state_col_name]]
-                missing_df = missing_df.drop_duplicates().reset_index(drop=True)
-                missing_df.columns = ['Missing EAN', 'Associated State']
+                missing_df = merged[missing_mask][[selected_cols['ref_ean'], state_col_in_merged]]
+                missing_df = missing_df.rename(columns={
+                    selected_cols['ref_ean']: 'Missing EAN',
+                    state_col_in_merged: 'State'
+                }).drop_duplicates()
                 
                 missing_path = os.path.join(base_path, "missing_eans.xlsx")
                 missing_df.to_excel(missing_path, index=False)
 
-            # Create state folders and EAN files
-            grouped = merged.groupby([state_col_name, selected_cols['ref_ean']])
+            # Create state folders and EAN files with state column
+            grouped = merged.groupby([state_col_in_merged, selected_cols['ref_ean']])
             
             for (state, ean), group in grouped:
-                # Sanitize folder names
+                # Sanitize names for filesystem safety
                 safe_state = str(state).replace('/', '_').strip()
                 safe_ean = str(ean).replace('/', '_').strip()
                 
@@ -123,7 +127,12 @@ def main():
                 os.makedirs(state_folder, exist_ok=True)
                 
                 output_path = os.path.join(state_folder, f"{safe_ean}.csv")
-                group.drop(columns='_merge').to_csv(output_path, index=False)
+                
+                # Ensure state column is included
+                final_group = group.drop(columns='_merge').rename(columns={
+                    state_col_in_merged: selected_cols['state']  # Preserve original name
+                })
+                final_group.to_csv(output_path, index=False)
 
             # Create ZIP download
             zip_buffer = create_zip(base_path)
