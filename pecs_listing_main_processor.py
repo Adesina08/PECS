@@ -99,7 +99,7 @@ def main():
             if len(missing_eans) > 0:
                 missing_df = pd.DataFrame({
                     'Missing EANs': missing_eans,
-                    'State': merged[missing_mask][selected_cols['state']].unique()[0]
+                    'state': merged[missing_mask][selected_cols['state']].unique()[0]
                 })
                 missing_path = os.path.join(base_path, "missing_eans.xlsx")
                 missing_df.to_excel(missing_path, index=False)
