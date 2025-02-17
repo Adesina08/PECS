@@ -4,6 +4,7 @@ import os
 import re
 import zipfile
 import io
+import shutil
 
 def create_zip_file(directory):
     """Create a ZIP file containing all files from the directory structure"""
@@ -24,6 +25,9 @@ def process_csv(uploaded_file):
     required_columns = ['state', 'EAN']
     if not all(col in df.columns for col in required_columns):
         raise ValueError("CSV must contain 'state' and 'EAN' columns")
+    
+    # Convert EAN column to string to avoid issues with file naming
+    df['EAN'] = df['EAN'].astype(str)
     
     # Check for both possible column patterns
     long_columns = []
@@ -55,7 +59,7 @@ def process_csv(uploaded_file):
     
     for index, row in df.iterrows():
         state = row['state']
-        EAN = row['EAN']
+        EAN = str(row['EAN'])  # Ensure EAN is a string
         
         # Create state directory
         state_dir = os.path.join(base_dir, state)
@@ -117,7 +121,6 @@ def main():
             st.balloons()
             
             # Clean up the processed_data directory
-            import shutil
             shutil.rmtree(base_dir)
             
         except Exception as e:
