@@ -25,16 +25,28 @@ def process_csv(uploaded_file):
     if not all(col in df.columns for col in required_columns):
         raise ValueError("CSV must contain 'state' and 'EAN' columns")
     
-    # Extract and sort longitude columns (updated regex pattern)
+    # Check for both possible column patterns
     long_columns = []
+    using_generic_columns = False
+    
+    # First try numbered longitude columns
     for col in df.columns:
         match = re.match(r'location_gps-Longitude_(\d+)', col)
         if match:
             suffix = int(match.group(1))
             long_columns.append((suffix, col))
     
+    # If no numbered columns found, check for generic columns
     if not long_columns:
-        raise ValueError("CSV must contain longitude columns (location_gps-Longitude_1, location_gps-Longitude_2, etc.)")
+        if 'Longitude' in df.columns and 'Latitude' in df.columns:
+            long_columns = [(1, 'Longitude')]
+            using_generic_columns = True
+        else:
+            raise ValueError(
+                "CSV must contain either: \n"
+                "- Numbered longitude columns (location_gps-Longitude_1, location_gps-Longitude_2, etc.)\n"
+                "- OR generic 'Latitude' and 'Longitude' columns"
+            )
     
     long_columns.sort(key=lambda x: x[0])
     
@@ -56,8 +68,12 @@ def process_csv(uploaded_file):
             if pd.isnull(long_val):
                 break
             
-            # Updated latitude column name
-            lat_col = f'location_gps-Latitude_{suffix}'
+            # Get corresponding latitude column
+            if using_generic_columns:
+                lat_col = 'Latitude'
+            else:
+                lat_col = f'location_gps-Latitude_{suffix}'
+            
             lat_val = row.get(lat_col, None)
             
             listings.append({
@@ -80,7 +96,7 @@ def process_csv(uploaded_file):
     return base_dir
 
 def main():
-    st.title("PECS EA LISITNG SPLITTER")
+    st.title("PECS EA LISTING SPLITTER")
     
     uploaded_file = st.file_uploader("Upload CSV file", type=['csv'])
     
@@ -92,15 +108,15 @@ def main():
             # Create download button for the zip file
             zip_file = create_zip_file(base_dir)
             st.download_button(
-                label="Download Splitted EAs",
+                label="Download Split EAs",
                 data=zip_file,
-                file_name="Splitted EAs.zip",
+                file_name="Split_EAs.zip",
                 mime="application/zip"
             )
             
             st.balloons()
             
-            # ClEAN up the processed_data directory
+            # Clean up the processed_data directory
             import shutil
             shutil.rmtree(base_dir)
             
