@@ -15,13 +15,20 @@ def create_zip(folder_path):
     memory_file.seek(0)
     return memory_file
 
+def read_file(file):
+    """Handle different file formats"""
+    if file.name.endswith('.csv'):
+        return pd.read_csv(file)
+    else:  # For xlsx, xlsm, and other Excel formats
+        return pd.read_excel(file)
+
 def main():
     st.title("EAN Data Processor 📁")
     
     # File Upload Section
     with st.expander("📤 Upload Files", expanded=True):
-        ref_file = st.file_uploader("Upload Reference File (Excel)", type=['xlsx'])
-        data_file = st.file_uploader("Upload Data File (Excel)", type=['xlsx'])
+        ref_file = st.file_uploader("Upload Reference File", type=['xlsx', 'xlsm', 'csv'])
+        data_file = st.file_uploader("Upload Data File", type=['xlsx', 'xlsm', 'csv'])
 
     # Column Configuration
     with st.expander("⚙️ Configure Columns", expanded=True):
@@ -43,9 +50,9 @@ def main():
             return
 
         try:
-            # Read files
-            ref_df = pd.read_excel(ref_file)
-            data_df = pd.read_excel(data_file)
+            # Read files with format detection
+            ref_df = read_file(ref_file)
+            data_df = read_file(data_file)
 
             # Validate columns
             required_ref_cols = [ref_ean_col, ref_secondary_col, state_col]
