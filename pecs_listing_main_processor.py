@@ -88,7 +88,8 @@ def main():
                 how='left',
                 indicator=True,
                 suffixes=('_ref', '_data')
-            
+            )
+
             # Handle state column naming after merge
             state_col_name = selected_cols['state']
             possible_state_cols = [state_col_name, f"{state_col_name}_ref"]
@@ -128,9 +129,9 @@ def main():
                 
                 output_path = os.path.join(state_folder, f"{safe_ean}.csv")
                 
-                # Ensure state column is included
+                # Ensure state column is included with original name
                 final_group = group.drop(columns='_merge').rename(columns={
-                    state_col_in_merged: selected_cols['state']  # Preserve original name
+                    state_col_in_merged: selected_cols['state']
                 })
                 final_group.to_csv(output_path, index=False)
 
