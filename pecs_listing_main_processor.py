@@ -39,11 +39,11 @@ def main():
     with st.expander("📤 STEP 1: Upload Files", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
-            ref_file = st.file_uploader("Reference File", type=['xlsx', 'csv'])
+            ref_file = st.file_uploader("Household Data File", type=['xlsx', 'csv'])
             if ref_file:
                 st.session_state.ref_df = read_file(ref_file)
         with col2:
-            data_file = st.file_uploader("Data File", type=['xlsx', 'csv'])
+            data_file = st.file_uploader("Listing File", type=['xlsx', 'csv'])
             if data_file:
                 st.session_state.data_df = read_file(data_file)
 
@@ -53,7 +53,7 @@ def main():
         selected_cols = {}
         
         with col1:
-            st.subheader("Reference File")
+            st.subheader("Household Data File")
             if st.session_state.ref_df is not None:
                 ref_cols = st.session_state.ref_df.columns.tolist()
                 selected_cols['ref_ean'] = st.selectbox("EAN Column", ref_cols, key='ref_ean')
@@ -63,7 +63,7 @@ def main():
                 st.info("Upload reference file to configure columns")
 
         with col2:
-            st.subheader("Data File")
+            st.subheader("Listing File")
             if st.session_state.data_df is not None:
                 data_cols = st.session_state.data_df.columns.tolist()
                 selected_cols['data_ean'] = st.selectbox("EAN Column", data_cols, key='data_ean')
