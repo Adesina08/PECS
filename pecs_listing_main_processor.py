@@ -119,21 +119,29 @@ def main():
             # Create state folders and EAN files with state column
             grouped = merged.groupby([state_col_in_merged, selected_cols['ref_ean']])
             
-            for (state, ean), group in grouped:
-                # Sanitize names for filesystem safety
-                safe_state = str(state).replace('/', '_').strip()
-                safe_ean = str(ean).replace('/', '_').strip()
-                
-                state_folder = os.path.join(base_path, safe_state)
-                os.makedirs(state_folder, exist_ok=True)
-                
-                output_path = os.path.join(state_folder, f"{safe_ean}.csv")
-                
-                # Ensure state column is included with original name
-                final_group = group.drop(columns='_merge').rename(columns={
-                    state_col_in_merged: selected_cols['state']
-                })
-                final_group.to_csv(output_path, index=False)
+for (state, ean), group in grouped:
+    # Sanitize names for filesystem safety
+    safe_state = str(state).replace('/', '_').strip()
+    safe_ean = str(ean).replace('/', '_').strip()
+    
+    state_folder = os.path.join(base_path, safe_state)
+    os.makedirs(state_folder, exist_ok=True)
+    
+    output_path = os.path.join(state_folder, f"{safe_ean}.csv")
+    
+    # Ensure state column is included with original name
+    final_group = group.drop(columns='_merge').rename(columns={
+        state_col_in_merged: selected_cols['state']
+    })
+    
+    # Rename columns: change "Latitude.Data" to "Latitude" and "Longitude.Data" to "Longitude"
+    final_group = final_group.rename(columns={
+        "Latitude.Data": "Latitude",
+        "Longitude.Data": "Longitude"
+    })
+    
+    final_group.to_csv(output_path, index=False)
+
 
             # Create ZIP download
             zip_buffer = create_zip(base_path)
