@@ -136,8 +136,8 @@ def main():
                 
                 # Rename columns: change "Latitude.Data" to "Latitude" and "Longitude.Data" to "Longitude"
                 final_group = final_group.rename(columns={
-                    "Latitude.Data": "Latitude",
-                    "Longitude.Data": "Longitude"
+                    "location_gps_Latitude": "Latitude",
+                    "location_gps_Longitude": "Longitude"
                 })
                 
                 final_group.to_csv(output_path, index=False)
