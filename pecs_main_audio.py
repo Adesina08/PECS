@@ -31,7 +31,7 @@ if uploaded_file is not None:
         st.stop()
 
     # Check for required common columns.
-    common_cols = ['InstanceID', 'state', 'EAN', 'num_men']
+    common_cols = ['instanceID', 'state', 'EAN', 'num_men']
     for col in common_cols:
         if col not in df.columns:
             st.error(f"Required column '{col}' not found in the uploaded file.")
