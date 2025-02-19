@@ -6,131 +6,134 @@ import zipfile
 st.title("Excel Audio & Question Extractor with ZIP Download")
 
 st.markdown("""
-This app extracts specific columns from an uploaded Excel file and creates new Excel files for each state.
-**Process:**
-- It always includes **InstanceID**, **state**, **EAN**, and **num_men**.
-- It then extracts every column whose header contains **"audio"**.
-- For each audio column, the corresponding question column is determined by removing the prefix **"audio_"** (if present) from its header.
-- In the output file the order is:
-  1. The common columns.
-  2. For each audio column:
-     - The audio column,
-     - Its corresponding question column,
-     - A blank column (headered **approval status**) with green fill and white text.
-  3. A final column **Final Approval** is added at the end for final decision entry.
-All the Excel files (one per state) will be grouped into a ZIP file.
+This app extracts specific columns from an uploaded Excel file and creates new Excel files for each state.  
+**Process:**  
+- The app expects the first two rows of the uploaded Excel file to be header rows:  
+  - **Row 1:** Variable names (e.g., InstanceID, state, audio_..., etc.)  
+  - **Row 2:** Variable labels  
+- It always includes **InstanceID**, **state**, **EAN**, and **num_men**.  
+- It then extracts every column whose header contains **"audio"** (case insensitive).  
+- For each audio column, the corresponding question column is determined by removing the prefix **"audio_"** from its header.  
+- For each audio group, the output file will contain:  
+  1. The audio column  
+  2. Its corresponding question column (with its variable label from row 2, if available)  
+  3. A new blank column titled **approval status** (only its header cell in row 1 is colored green with white text)  
+- Finally, a **Final Approval** column is added at the end (with a two‑row header where the second row is blank).  
+- All state‑specific Excel files are grouped into one ZIP file for download.
 """)
 
 uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
     try:
-        df = pd.read_excel(uploaded_file)
+        # Read the file with two header rows (row 0 and row 1)
+        df = pd.read_excel(uploaded_file, header=[0, 1])
     except Exception as e:
         st.error("Error reading the Excel file: " + str(e))
         st.stop()
 
+    # Helper to retrieve a column tuple from the MultiIndex based on the first level
+    def get_column_by_first_level(df, name):
+        for col in df.columns:
+            if col[0] == name:
+                return col
+        return None
+
     # Check for required common columns.
     common_cols = ['instanceID', 'state', 'EAN', 'num_men']
+    common_col_tuples = {}
     for col in common_cols:
-        if col not in df.columns:
+        col_tuple = get_column_by_first_level(df, col)
+        if col_tuple is None:
             st.error(f"Required column '{col}' not found in the uploaded file.")
             st.stop()
+        common_col_tuples[col] = col_tuple
 
-    # Identify audio columns (case insensitive).
-    audio_columns = [col for col in df.columns if "audio" in col.lower()]
-    if not audio_columns:
+    # Identify audio columns (where the first-level header contains "audio")
+    audio_col_tuples = [col for col in df.columns if "audio" in col[0].lower()]
+    if not audio_col_tuples:
         st.warning("No audio columns found in the uploaded file.")
         st.stop()
 
-    st.success("File successfully read. Processing...")
-
-    # Dictionary to store each state's Excel file as bytes.
-    excel_files = {}
-
-    # Process the data by state.
-    states = df['state'].unique()
+    # Get unique states from the 'state' column.
+    state_col = common_col_tuples['state']
+    states = df[state_col].unique()
     st.write(f"Found {len(states)} unique state(s): {', '.join(map(str, states))}")
 
+    # Dictionary to store Excel files for each state.
+    excel_files = {}
+
     for state in states:
-        # Filter the DataFrame for the current state.
-        state_df = df[df['state'] == state]
+        state_df = df[df[state_col] == state].copy()
 
-        # Build the output DataFrame column by column.
-        new_df = pd.DataFrame(index=state_df.index)
+        # Build the new DataFrame column by column with a MultiIndex (2 header rows).
+        new_columns = []
+        new_data = {}
 
-        # 1. Add the common columns.
+        # 1. Add common columns in the specified order.
         for col in common_cols:
-            new_df[col] = state_df[col]
+            tup = common_col_tuples[col]
+            new_columns.append(tup)
+            new_data[tup] = state_df[tup]
 
         # 2. For each audio column, add:
-        #    - the audio column,
-        #    - the corresponding question column (if available, else blank),
-        #    - a blank approval status column (with a unique internal name).
-        for audio_col in audio_columns:
-            # Audio column.
-            new_df[audio_col] = state_df[audio_col]
+        #    - the audio column, 
+        #    - its corresponding question column (if exists; else create a blank column),
+        #    - a new approval status column (with header ("approval status", "") )
+        for audio_tup in audio_col_tuples:
+            # Audio column (from the original file, so both header rows are retained)
+            new_columns.append(audio_tup)
+            new_data[audio_tup] = state_df[audio_tup]
 
-            # Determine the corresponding question column name.
-            if audio_col.startswith("audio_"):
-                question_col = audio_col[len("audio_"):]
+            # Determine corresponding question column by removing "audio_" (if present)
+            audio_name = audio_tup[0]
+            if audio_name.lower().startswith("audio_"):
+                question_name = audio_name[len("audio_"):]
             else:
-                question_col = audio_col
-
-            # Add the question column (or blank if it does not exist).
-            if question_col in state_df.columns:
-                new_df[question_col] = state_df[question_col]
+                question_name = audio_name
+            question_tup = get_column_by_first_level(df, question_name)
+            if question_tup in state_df.columns:
+                new_columns.append(question_tup)
+                new_data[question_tup] = state_df[question_tup]
             else:
-                new_df[question_col] = ""
+                # If not found, create a new blank column with header (question_name, "")
+                new_tup = (question_name, "")
+                new_columns.append(new_tup)
+                new_data[new_tup] = pd.Series([""] * len(state_df), index=state_df.index)
 
-            # Create a unique internal name for the approval status column.
-            approval_internal = f"approval status__{audio_col}"
-            new_df[approval_internal] = ""
+            # Add new blank approval status column with a two-row header.
+            approval_tup = ("approval status", "")
+            new_columns.append(approval_tup)
+            new_data[approval_tup] = pd.Series([""] * len(state_df), index=state_df.index)
 
-        # 3. Add the final approval column.
-        new_df["Final Approval"] = ""
+        # 3. Append the Final Approval column at the end.
+        final_approval_tup = ("Final Approval", "")
+        new_columns.append(final_approval_tup)
+        new_data[final_approval_tup] = pd.Series([""] * len(state_df), index=state_df.index)
 
-        # 4. Reorder columns to ensure the desired layout.
-        #    Order: common columns, then for each audio: (audio, question, approval status) and finally Final Approval.
-        ordered_cols = []
-        ordered_cols.extend(common_cols)
-        for audio_col in audio_columns:
-            ordered_cols.append(audio_col)
-            if audio_col.startswith("audio_"):
-                question_col = audio_col[len("audio_"):]
-            else:
-                question_col = audio_col
-            ordered_cols.append(question_col)
-            ordered_cols.append(f"approval status__{audio_col}")
-        ordered_cols.append("Final Approval")
-        new_df = new_df[ordered_cols]
+        # Create the new DataFrame with the specified column order.
+        new_df = pd.DataFrame(new_data, columns=new_columns)
 
-        # 5. Rename approval status columns to display the header "approval status".
-        rename_map = {f"approval status__{audio_col}": "approval status" for audio_col in audio_columns}
-        new_df.rename(columns=rename_map, inplace=True)
-
-        # 6. Write the DataFrame to an Excel file with formatting.
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+        # Write the new DataFrame to an Excel file using xlsxwriter.
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             new_df.to_excel(writer, index=False, sheet_name=str(state))
-            workbook  = writer.book
+            workbook = writer.book
             worksheet = writer.sheets[str(state)]
 
-            # Create the format for the approval status cells: green fill, white text.
+            # Create the header format for approval status cells (only top header row).
             approval_format = workbook.add_format({'bg_color': 'green', 'font_color': 'white'})
 
-            # Apply the format to every column whose header is "approval status".
-            for idx, header in enumerate(new_df.columns):
-                if header == "approval status":
-                    # Set the column format (default width is maintained).
-                    worksheet.set_column(idx, idx, None, approval_format)
-
+            # For multi-index headers, the top header row is at row 0.
+            # Overwrite the header cell in row 0 for every "approval status" column.
+            for col_num, col_tuple in enumerate(new_df.columns):
+                if col_tuple[0] == "approval status":
+                    worksheet.write(0, col_num, "approval status", approval_format)
             writer.close()
+        output.seek(0)
+        excel_files[f"{state}.xlsx"] = output.getvalue()
 
-        excel_buffer.seek(0)
-        excel_files[f"{state}.xlsx"] = excel_buffer.getvalue()
-
-    # 7. Create a ZIP file containing all the Excel files.
+    # Create a ZIP file containing all the state-specific Excel files.
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for filename, filebytes in excel_files.items():
@@ -143,5 +146,4 @@ if uploaded_file is not None:
         file_name="state_excel_files.zip",
         mime="application/zip"
     )
-
     st.success("Processing complete!")
