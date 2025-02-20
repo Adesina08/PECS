@@ -129,17 +129,42 @@ def main():
                 
                 output_path = os.path.join(state_folder, f"{safe_ean}.csv")
                 
-                # Ensure state column is included with original name
-                final_group = group.drop(columns='_merge').rename(columns={
-                    state_col_in_merged: selected_cols['state']
-                })
+                # Process the group: remove merge indicator and rename columns
+                final_group = group.drop(columns='_merge')
                 
-                # Rename columns: change "Latitude.Data" to "Latitude" and "Longitude.Data" to "Longitude"
+                # Rename the state column using the configuration mapping
+                final_group = final_group.rename(columns={state_col_in_merged: selected_cols['state']})
+                
+                # Rename GPS columns to "Latitude" and "Longitude"
                 final_group = final_group.rename(columns={
-                    "location_gps_Latitude": "Latitude",
-                    "location_gps_Longitude": "Longitude"
+                    "location_gps_Latitude_1": "Latitude",
+                    "location_gps_Longitude_1": "Longitude"
                 })
                 
+                # Rename the reference EAN column to "EAN" for clarity
+                final_group = final_group.rename(columns={selected_cols['ref_ean']: "EAN"})
+                
+                # Define the final set of columns to include in the output
+                final_columns = [
+                    "EAN",
+                    selected_cols['state'],  # the state column renamed to user's chosen label
+                    "Latitude",
+                    "Longitude",
+                    "num_men",
+                    "supervisor_ref",
+                    "enumerator_ref",
+                    "nom_1"
+                ]
+                
+                # Ensure the group has all the required columns (if missing, add them as empty)
+                for col in final_columns:
+                    if col not in final_group.columns:
+                        final_group[col] = ''
+                
+                # Filter to only the desired columns
+                final_group = final_group[final_columns]
+                
+                # Write the group data to a CSV file
                 final_group.to_csv(output_path, index=False)
 
             # Create ZIP download
